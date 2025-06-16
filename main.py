@@ -11,6 +11,10 @@ db = client["rastro"]
 visualizacoes = db["visualizacoes"]
 conversoes = db["conversoes"]
 
+@app.route('/')
+def home():
+    return 'API do Rastro Beacon está online!'
+
 @app.route('/conversao', methods=['POST'])
 def conversao():
     data = request.get_json()
