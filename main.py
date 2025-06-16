@@ -1,38 +1,40 @@
-from flask import Flask, request, send_file
-from hashlib import sha256
+from flask import Flask, request, jsonify
 from datetime import datetime
-import pymongo
-import io
+from pymongo import MongoClient
 
 app = Flask(__name__)
 
+# Conexão com MongoDB
 MONGO_URI = "mongodb+srv://admin:Duduzinho123@cluster0.tkda2dm.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
-client = pymongo.MongoClient(MONGO_URI)
+client = MongoClient(MONGO_URI)
 db = client["rastro"]
-colecao = db["visualizacoes"]
+visualizacoes = db["visualizacoes"]
+conversoes = db["conversoes"]
 
-@app.route('/beacon/<influencer>/<campanha>.png')
-def beacon(influencer, campanha):
-    ip = request.remote_addr
-    user_agent = request.headers.get('User-Agent', '')
+@app.route('/conversao', methods=['POST'])
+def conversao():
+    data = request.get_json()
+    fingerprint = data.get("fingerprint")
+    url = data.get("url")
     timestamp = datetime.utcnow()
 
-    fingerprint = sha256(f"{ip}|{user_agent}".encode()).hexdigest()
+    if not fingerprint:
+        return jsonify({"status": "erro", "mensagem": "Fingerprint ausente"}), 400
 
-    colecao.insert_one({
+    # Verifica se esse fingerprint já viu algum story
+    visualizou = visualizacoes.find_one({"fingerprint": fingerprint})
+
+    # Registra como conversão mesmo que não tenha visto o story
+    conversoes.insert_one({
         "fingerprint": fingerprint,
-        "ip": ip,
-        "user_agent": user_agent,
-        "influencer": influencer,
-        "campanha": campanha,
-        "timestamp": timestamp
+        "url": url,
+        "timestamp": timestamp,
+        "influencer": visualizou["influencer"] if visualizou else None,
+        "campanha": visualizou["campanha"] if visualizou else None,
+        "foi_influenciado": bool(visualizou)
     })
 
-    pixel = b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01' \
-            b'\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4' \
-            b'\x89\x00\x00\x00\nIDATx\xdac\x00\x01\x00\x00\x05' \
-            b'\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82'
-    return send_file(io.BytesIO(pixel), mimetype='image/png')
+    return jsonify({"status": "ok", "foi_influenciado": bool(visualizou)})
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=3000)
+    app.run(debug=True)
