@@ -1,7 +1,7 @@
-from flask import Flask, request, jsonify, send_file
+from flask import Flask, request, jsonify, redirect
 from datetime import datetime
 from pymongo import MongoClient
-import io
+from hashlib import sha256
 
 app = Flask(__name__)
 
@@ -9,8 +9,10 @@ app = Flask(__name__)
 MONGO_URI = "mongodb+srv://admin:Duduzinho123@cluster0.tkda2dm.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
 client = MongoClient(MONGO_URI)
 db = client["rastro"]
+
 visualizacoes = db["visualizacoes"]
 conversoes = db["conversoes"]
+campanhas = db["campanhas"]
 
 @app.route("/")
 def home():
@@ -22,47 +24,43 @@ def beacon(influencer, campanha):
     user_agent = request.headers.get('User-Agent', '')
     timestamp = datetime.utcnow()
 
-    # fingerprint básico gerado a partir do IP + user-agent
-    import hashlib
-    fingerprint = hashlib.sha256(f"{ip}{user_agent}".encode()).hexdigest()
+    fingerprint = sha256(f"{ip}{user_agent}".encode()).hexdigest()
 
     visualizacoes.insert_one({
         "fingerprint": fingerprint,
         "ip": ip,
         "user_agent": user_agent,
-        "influencer": influencer,
+        "influencer": f"@{influencer}",
         "campanha": campanha,
         "timestamp": timestamp
     })
 
-    # Gera pixel invisível (1x1 transparente)
-    pixel = b'\x47\x49\x46\x38\x39\x61\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xFF\xFF\xFF\x21' \
-            b'\xF9\x04\x01\x00\x00\x00\x00\x2C\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02' \
-            b'\x44\x01\x00\x3B'
-    return send_file(io.BytesIO(pixel), mimetype='image/gif')
+    from flask import send_file
+    import io
+    return send_file(io.BytesIO(b""), mimetype='image/png')
 
-@app.route('/conversao', methods=['POST'])
-def conversao():
-    data = request.get_json()
-    fingerprint = data.get("fingerprint")
-    url = data.get("url")
+@app.route("/r/<campaign_hash>")
+def track_and_redirect(campaign_hash):
+    campanha = campanhas.find_one({"hash": campaign_hash})
+    if not campanha:
+        return "Campanha não encontrada", 404
+
+    ip = request.remote_addr
+    user_agent = request.headers.get("User-Agent", "")
+    referrer = request.headers.get("Referer", "")
     timestamp = datetime.utcnow()
 
-    if not fingerprint:
-        return jsonify({"status": "erro", "mensagem": "Fingerprint ausente"}), 400
-
-    visualizou = visualizacoes.find_one({"fingerprint": fingerprint})
+    fingerprint = sha256(f"{ip}{user_agent}".encode()).hexdigest()
 
     conversoes.insert_one({
         "fingerprint": fingerprint,
-        "url": url,
         "timestamp": timestamp,
-        "influencer": visualizou["influencer"] if visualizou else None,
-        "campanha": visualizou["campanha"] if visualizou else None,
-        "foi_influenciado": bool(visualizou)
+        "referrer": referrer,
+        "influencer": campanha.get("influencer"),
+        "campaign_hash": campaign_hash
     })
 
-    return jsonify({"status": "ok", "foi_influenciado": bool(visualizou)})
+    return redirect(campanha["url"], code=302)
 
 if __name__ == '__main__':
     app.run(debug=True)
