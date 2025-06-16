@@ -7,7 +7,7 @@ app = Flask(__name__)
 CORS(app)  # <-- ATIVA O CORS PARA TODOS OS DOMÍNIOS
 
 # MongoDB
-MONGO_URI = "sua_connection_string_mongo"
+MONGO_URI = "mongodb+srv://admin:Duduzinho123@cluster0.tkda2dm.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
 client = MongoClient(MONGO_URI)
 db = client["rastro"]
 campanhas = db["campanhas"]
