@@ -1,12 +1,13 @@
 from flask import Flask, request, jsonify, redirect
 from flask_cors import CORS
-from pymongo import MongoClient
 from datetime import datetime
+from pymongo import MongoClient
+import hashlib
 
 app = Flask(__name__)
 CORS(app)
 
-# MongoDB
+# Conexão com MongoDB
 MONGO_URI = "mongodb+srv://admin:Duduzinho123@cluster0.tkda2dm.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
 client = MongoClient(MONGO_URI)
 db = client["rastro"]
@@ -14,37 +15,15 @@ campanhas = db["campanhas"]
 conversoes = db["conversoes"]
 visualizacoes = db["visualizacoes"]
 
-@app.route('/')
+@app.route("/")
 def home():
     return "API do Rastro Beacon está online!"
 
-@app.route('/r/<hash>')
-def redirecionar(hash):
-    campanha = campanhas.find_one({"hash": hash})
-    if not campanha:
-        return "Campanha não encontrada", 404
-
-    # Gera script para salvar no localStorage (executado como imagem invisível)
-    html = f"""
-    <html>
-    <head><meta http-equiv="refresh" content="0; url={campanha['url']}"></head>
-    <body>
-    <script>
-      localStorage.setItem("rastro_influencer", "{campanha['influencer']}");
-      localStorage.setItem("rastro_campanha", "{campanha['campanha']}");
-    </script>
-    </body>
-    </html>
-    """
-    return html
-
-@app.route('/conversao', methods=['POST'])
+@app.route("/conversao", methods=["POST"])
 def registrar_conversao():
     data = request.get_json()
     fingerprint = data.get("fingerprint")
     url = data.get("url")
-    influencer = data.get("influencer")
-    campanha = data.get("campanha")
     timestamp = datetime.utcnow()
 
     if not fingerprint or not url:
@@ -53,9 +32,34 @@ def registrar_conversao():
     conversoes.insert_one({
         "fingerprint": fingerprint,
         "url": url,
-        "timestamp": timestamp,
-        "influencer": influencer,
-        "campanha": campanha
+        "timestamp": timestamp
     })
 
     return jsonify({"status": "ok"})
+
+@app.route("/r/<campaign_hash>")
+def redirecionar_campanha(campaign_hash):
+    registro = campanhas.find_one({"hash": campaign_hash})
+
+    if not registro:
+        return "Campanha não encontrada", 404
+
+    # Coleta dados do usuário
+    ip = request.remote_addr
+    ua = request.headers.get("User-Agent", "")
+    timestamp = datetime.utcnow()
+
+    raw = ip + ua
+    fingerprint = hashlib.sha256(raw.encode()).hexdigest()
+
+    conversoes.insert_one({
+        "fingerprint": fingerprint,
+        "user_agent": ua,
+        "ip": ip,
+        "timestamp": timestamp,
+        "influencer": registro.get("influencer"),
+        "campanha": registro.get("hash"),
+        "url": registro.get("url")
+    })
+
+    return redirect(registro.get("url"), code=302)
