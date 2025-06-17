@@ -9,7 +9,7 @@ app = Flask(__name__)
 
 # MongoDB com timeout de conexão
 MONGO_URI = os.getenv("MONGO_URI", "mongodb+srv://admin:Duduzinho123@cluster0.tkda2dm.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
-client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)  # 5 segundos de timeout
+client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)  # timeout de 5s
 db = client["rastreamento"]
 collection = db["acessos"]
 
@@ -18,7 +18,7 @@ def gerar_hash(campanha, influenciador):
     base = f"{campanha.lower()}-{influenciador.lower()}"
     return hashlib.sha256(base.encode()).hexdigest()[:10]
 
-# Rota redirecionamento
+# Rota de redirecionamento: /r/<hash>
 @app.route("/r/<hash_id>")
 def redirecionar(hash_id):
     user_agent = request.headers.get("User-Agent")
@@ -36,7 +36,7 @@ def redirecionar(hash_id):
     destino = "https://www.duzis.com.br"
     return redirect(destino, code=302)
 
-# Rota beacon invisível
+# Rota de beacon invisível: /beacon/<influencer>/<campanha>.png
 @app.route("/beacon/<influenciador>/<imagem>")
 def beacon(influenciador, imagem):
     campanha = imagem.split(".")[0]
@@ -54,6 +54,7 @@ def beacon(influenciador, imagem):
         "via": "beacon"
     })
 
+    # Retorna PNG invisível 1x1
     pixel = b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01' \
             b'\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89' \
             b'\x00\x00\x00\nIDATx\xdacd\xf8\xff\xff?\x00\x05\xfe\x02' \
