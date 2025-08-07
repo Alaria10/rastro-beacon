@@ -8,7 +8,7 @@ import io
 app = Flask(__name__)
 
 # MongoDB com timeout de conexão
-MONGO_URI = os.getenv("MONGO_URI", "mongodb+srv://admin:Duduzinho123@cluster0.tkda2dm.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
+MONGO_URI = os.getenv("MONGO_URI", "mongodb+srv://admin:******cluster0.tkda2dm.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
 client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)  # timeout de 5s
 db = client["rastreamento"]
 collection = db["acessos"]
